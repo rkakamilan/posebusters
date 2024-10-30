@@ -147,10 +147,26 @@ class OptimizedPoseBusters(PoseBusters):
                 results.extend(batch_results)
                 pbar.update(len(batch))
         
-        # Convert results to DataFrame
+
         df = pd.DataFrame(results)
+        df.index.names = ["file", "molecule"]
         if not full_report:
-            df = df[self.config["output_columns"]]
+            # 設定ファイルから選択された出力列を取得
+            chosen_columns = []
+            rename_map = {}
+            for module in self.config["modules"]:
+                # 選択された出力列を収集
+                binary_outputs = module.get("chosen_binary_test_output", [])
+                chosen_columns.extend(binary_outputs)
+                # 出力列の名前変更マッピングを収集
+                rename_outputs = module.get("rename_outputs", {})
+                rename_map.update(rename_outputs)
+
+            # 選択された列のみを保持し、名前を変更
+            df = df[chosen_columns]
+            df.columns = [rename_map.get(col, col) for col in df.columns]
+        # if not full_report:
+        #     df = df[self.config["output_columns"]]
         
         return df
 
