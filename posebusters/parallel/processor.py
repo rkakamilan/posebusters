@@ -4,7 +4,7 @@ from rdkit.Chem.rdchem import Mol
 
 class MoleculeProcessor:
     """Processes molecules with caching support."""
-    
+
     def process_molecule(
         self,
         mol_args: Dict[str, Mol],
@@ -17,7 +17,7 @@ class MoleculeProcessor:
             return self.get_empty_results(module_configs)
 
         results = {}
-        
+
         for name, fname, func, args in module_configs:
             # Check cache
             cache_key = None
