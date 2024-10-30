@@ -50,7 +50,7 @@ class OptimizedPoseBusters(PoseBusters):
     ) -> Dict:
         """Process single molecule with all modules."""
         results = {}
-        
+
         # Early return for invalid molecules
         if not all(mol is not None for mol in mol_args.values()):
             return {"results": {}}
@@ -71,14 +71,14 @@ class OptimizedPoseBusters(PoseBusters):
                     args_needed = {k: args_needed.get(k, None) for k in args_needed}
                 module_output = func(**args_needed)
                 results[name] = module_output["results"]
-                
+
                 # Cache result
                 if cache_key:
                     self.cache.set(cache_key, module_output["results"])
             except Exception as e:
                 warnings.warn(f"Error in {name}: {str(e)}")
                 results[name] = {}
-                
+
         return results
 
     def _process_batch(
