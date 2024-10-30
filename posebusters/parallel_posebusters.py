@@ -88,7 +88,7 @@ class ParallelPoseBusters(PoseBusters):
                     if mol_cond is not None:
                         args["mol_cond"] = safe_load_mol(mol_cond)
                     mol_args_batch.append(args)
-                
+
                 # Process batch
                 batch_results = self.executor.execute_batch(
                     mol_args_batch,
@@ -119,5 +119,7 @@ class ParallelPoseBusters(PoseBusters):
             for module in self.config["modules"]:
                 rename_map.update(module.get("rename_outputs", {}))
             df = df.rename(columns=rename_map)
+
+        df.columns = [c.lower().replace(" ", "_") for c in df.columns]
 
         return df
