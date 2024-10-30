@@ -4,11 +4,34 @@ PoseBusters: Plausibility checks for generated molecule poses.
 
 ### Paper in [Chemical Science](https://pubs.rsc.org/en/content/articlelanding/2024/sc/d3sc04185a) and preprint on [arXiv](https://arxiv.org/abs/2308.05777)
 
+## New Features in 0.4.0
+- Parallel processing support for improved performance
+- Result caching mechanism
+- Progress bar for long-running operations
+
+```python
+# Standard usage
+from posebusters import PoseBusters
+pb = PoseBusters(config="redock")
+
+# New parallel processing support
+from posebusters import ParallelPoseBusters
+pb = ParallelPoseBusters(
+    config="redock",
+    n_workers=4,  # Number of parallel workers
+    cache_size=1000  # Size of result cache
+)
+```
+
 ## Installation
 
 ```bash
 # install with pip from PyPI
 pip install posebusters
+
+# install with new features of v0.4.0
+# clone this repository
+pip install -e ".[parallel]"
 ```
 <!-- # install with conda from conda-forge
 conda install posebusters -c conda-forge -->

@@ -38,9 +38,8 @@ docs = [
     "sphinxcontrib-programoutput",
 ]
 test = ["pre-commit", "pytest", "pytest-cov"]
-optimization = [
+parallel = [
     "tqdm",
-    "numpy>=1.20.0",
 ]
 
 [project.urls]
