@@ -38,9 +38,7 @@ docs = [
     "sphinxcontrib-programoutput",
 ]
 test = ["pre-commit", "pytest", "pytest-cov"]
-parallel = [
-    "tqdm",
-]
+parallel = ["tqdm"]
 
 [project.urls]
 Documentation = "https://posebusters.readthedocs.io/en/latest/"
