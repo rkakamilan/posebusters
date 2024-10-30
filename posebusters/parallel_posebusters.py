@@ -9,6 +9,7 @@ from . import PoseBusters
 from .parallel.cache import ComputationCache
 from .parallel.executor import ParallelExecutor
 from .parallel.processor import MoleculeProcessor
+from .tools.loading import safe_load_mol
 
 class ParallelPoseBusters(PoseBusters):
     """PoseBusters with parallel processing capabilities."""
@@ -81,11 +82,11 @@ class ParallelPoseBusters(PoseBusters):
                 # Prepare batch arguments
                 mol_args_batch = []
                 for mol_p in batch:
-                    args = {"mol_pred": self._load_molecule(mol_p)}
+                    args = {"mol_pred": safe_load_mol(mol_p)}
                     if mol_true is not None:
-                        args["mol_true"] = self._load_molecule(mol_true)
+                        args["mol_true"] = safe_load_mol(mol_true)
                     if mol_cond is not None:
-                        args["mol_cond"] = self._load_molecule(mol_cond)
+                        args["mol_cond"] = safe_load_mol(mol_cond)
                     mol_args_batch.append(args)
                 
                 # Process batch
