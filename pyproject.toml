@@ -25,7 +25,7 @@ classifiers = [
 ]
 requires-python = "~=3.8"
 dynamic = ["version", "description"]
-dependencies = ['rdkit >= 2020.09', 'pandas', 'numpy', 'pyyaml']
+dependencies = ['rdkit >= 2020.09', 'pandas', 'numpy', 'pyyaml', 'tqdm']
 
 [project.optional-dependencies]
 dev = ["ruff"]
@@ -38,6 +38,10 @@ docs = [
     "sphinxcontrib-programoutput",
 ]
 test = ["pre-commit", "pytest", "pytest-cov"]
+optimization = [
+    "tqdm",
+    "numpy>=1.20.0",
+]
 
 [project.urls]
 Documentation = "https://posebusters.readthedocs.io/en/latest/"
