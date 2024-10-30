@@ -43,56 +43,105 @@ class OptimizedPoseBusters(PoseBusters):
         self.module_runner = ModuleRunner()
         self._initialize_modules()
 
+    # def _parallel_process_molecule(
+    #     self,
+    #     mol_args: Dict[str, Mol],
+    #     module_configs: List[Tuple]
+    # ) -> Dict:
+    #     """Process single molecule with all modules."""
+    #     results = {}
+
+    #     # Early return for invalid molecules
+    #     if not all(mol is not None for mol in mol_args.values()):
+    #         return {"results": {}}
+
+    #     for name, fname, func, args in module_configs:
+    #         # Check cache first
+    #         cache_key = self.cache.get_key(mol_args["mol_pred"], fname)
+    #         if cache_key:
+    #             cached_result = self.cache.get(cache_key)
+    #             if cached_result is not None:
+    #                 results[name] = cached_result
+    #                 continue
+
+    #         # Run computation
+    #         args_needed = {k: v for k, v in mol_args.items() if k in args}
+    #         try:
+    #             if fname == "loading":
+    #                 args_needed = {k: args_needed.get(k, None) for k in args_needed}
+    #             module_output = func(**args_needed)
+    #             results[name] = module_output["results"]
+
+    #             # Cache result
+    #             if cache_key:
+    #                 self.cache.set(cache_key, module_output["results"])
+    #         except Exception as e:
+    #             warnings.warn(f"Error in {name}: {str(e)}")
+    #             results[name] = {}
+
+    #     return results
+
     def _parallel_process_molecule(
         self,
         mol_args: Dict[str, Mol],
-        module_configs: List[Tuple]
-    ) -> Dict:
-        """Process single molecule with all modules."""
-        results = {}
+        module_configs: List[tuple]
+    ) -> Dict[str, Any]:
+        """Process single molecule with all modules and flatten results."""
+        # 早期リターン
+        if not all(mol_args.get(k) is not None for k in mol_args):
+            return self._get_empty_results()
 
-        # Early return for invalid molecules
-        if not all(mol is not None for mol in mol_args.values()):
-            return {"results": {}}
-
+        flattened_results = {}
+        
+        # 各モジュールを実行
         for name, fname, func, args in module_configs:
-            # Check cache first
-            cache_key = self.cache.get_key(mol_args["mol_pred"], fname)
-            if cache_key:
-                cached_result = self.cache.get(cache_key)
-                if cached_result is not None:
-                    results[name] = cached_result
-                    continue
+            # キャッシュをチェック
+            cache_key = None
+            if "mol_pred" in mol_args:
+                cache_key = self.cache.get_key(mol_args["mol_pred"], fname)
+                if cache_key:
+                    cached_result = self.cache.get(cache_key)
+                    if cached_result is not None:
+                        flattened_results.update(cached_result)
+                        continue
 
-            # Run computation
+            # 計算実行
             args_needed = {k: v for k, v in mol_args.items() if k in args}
             try:
                 if fname == "loading":
                     args_needed = {k: args_needed.get(k, None) for k in args_needed}
                 module_output = func(**args_needed)
-                results[name] = module_output["results"]
-
-                # Cache result
-                if cache_key:
-                    self.cache.set(cache_key, module_output["results"])
+                
+                # 結果をフラット化して追加
+                if "results" in module_output:
+                    flattened_results.update(module_output["results"])
+                    
+                    # 結果をキャッシュ
+                    if cache_key:
+                        self.cache.set(cache_key, module_output["results"])
+                        
             except Exception as e:
                 warnings.warn(f"Error in {name}: {str(e)}")
-                results[name] = {}
+                # エラー時は該当モジュールの出力をNaNで埋める
+                for output in self._get_module_outputs(fname):
+                    flattened_results[output] = np.nan
+                    
+        return flattened_results
 
-        return results
+    def _get_empty_results(self) -> Dict[str, Any]:
+        """Get empty results with all expected columns."""
+        empty_results = {}
+        for module in self.config["modules"]:
+            for output in module.get("chosen_binary_test_output", []):
+                empty_results[output] = np.nan
+        return empty_results
 
-    def _process_batch(
-        self,
-        mol_batch: List[Dict[str, Mol]],
-        module_configs: List[Tuple]
-    ) -> List[Dict]:
-        """Process a batch of molecules in parallel."""
-        process_func = partial(self._parallel_process_molecule, module_configs=module_configs)
-        
-        Executor = ThreadPoolExecutor if self.use_threading else ProcessPoolExecutor
-        with Executor(max_workers=self.n_workers) as executor:
-            results = list(executor.map(process_func, mol_batch))
-        return results
+    def _get_module_outputs(self, fname: str) -> List[str]:
+        """Get expected outputs for a given module."""
+        for module in self.config["modules"]:
+            if module["function"] == fname:
+                return module.get("chosen_binary_test_output", [])
+        return []
 
     def bust(
         self,
@@ -102,37 +151,35 @@ class OptimizedPoseBusters(PoseBusters):
         batch_size: int = 100,
         full_report: bool = False,
     ) -> pd.DataFrame:
-        """Run optimized tests on molecules.
+        """Run optimized tests on molecules."""
+        # 分子リストの準備
+        mol_pred_list = [mol_pred] if isinstance(mol_pred, (Mol, Path, str)) else list(mol_pred)
         
-        Args:
-            mol_pred: Predicted molecule(s)
-            mol_true: True molecule
-            mol_cond: Conditioning molecule
-            batch_size: Size of parallel processing batches
-            full_report: Include full report
-            
-        Returns:
-            DataFrame with results
-        """
-        # Prepare molecule list
-        mol_pred_list = [mol_pred] if isinstance(mol_pred, (Mol, Path, str)) else mol_pred
-        
-        # Prepare module configurations
+        # ファイルパスの設定
+        columns = ["mol_pred", "mol_true", "mol_cond"]
+        self.file_paths = pd.DataFrame(
+            [[p, mol_true, mol_cond] for p in mol_pred_list],
+            columns=columns
+        )
+
+        # モジュール設定の準備
         module_configs = list(zip(
             self.module_name,
             self.fname,
             self.module_func,
             self.module_args
         ))
-        
-        # Process molecules in batches
+
+        # バッチ処理
         results = []
-        mol_batches = [mol_pred_list[i:i + batch_size] 
-                      for i in range(0, len(mol_pred_list), batch_size)]
+        mol_batches = [
+            mol_pred_list[i:i + batch_size] 
+            for i in range(0, len(mol_pred_list), batch_size)
+        ]
         
         with tqdm(total=len(mol_pred_list), disable=not self.show_progress) as pbar:
             for batch in mol_batches:
-                # Prepare molecule arguments for batch
+                # バッチの分子引数を準備
                 mol_args_batch = []
                 for mol_p in batch:
                     args = {"mol_pred": self._load_molecule(mol_p)}
@@ -142,31 +189,36 @@ class OptimizedPoseBusters(PoseBusters):
                         args["mol_cond"] = self._load_molecule(mol_cond)
                     mol_args_batch.append(args)
                 
-                # Process batch
-                batch_results = self._process_batch(mol_args_batch, module_configs)
+                # バッチ処理
+                batch_results = []
+                for mol_args in mol_args_batch:
+                    result = self._parallel_process_molecule(mol_args, module_configs)
+                    batch_results.append(result)
                 results.extend(batch_results)
                 pbar.update(len(batch))
-        
 
+        # 結果をDataFrameに変換
         df = pd.DataFrame(results)
-        df.index.names = ["file", "molecule"]
+        
+        if len(df) == 0:
+            # 空の結果の場合、期待される列を持つ空のDataFrameを返す
+            empty_results = self._get_empty_results()
+            df = pd.DataFrame([empty_results])
+
+        # インデックスの設定
+        df.index = pd.MultiIndex.from_product(
+            [[str(p) for p in mol_pred_list], [""]],
+            names=["file", "molecule"]
+        )
+
         if not full_report:
-            # 設定ファイルから選択された出力列を取得
-            chosen_columns = []
+            # 名前変更マッピングの作成
             rename_map = {}
             for module in self.config["modules"]:
-                # 選択された出力列を収集
-                binary_outputs = module.get("chosen_binary_test_output", [])
-                chosen_columns.extend(binary_outputs)
-                # 出力列の名前変更マッピングを収集
-                rename_outputs = module.get("rename_outputs", {})
-                rename_map.update(rename_outputs)
-
-            # 選択された列のみを保持し、名前を変更
-            df = df[chosen_columns]
-            df.columns = [rename_map.get(col, col) for col in df.columns]
-        # if not full_report:
-        #     df = df[self.config["output_columns"]]
+                rename_map.update(module.get("rename_outputs", {}))
+            
+            # 列名の変更を適用
+            df = df.rename(columns=rename_map)
 
         return df
 
