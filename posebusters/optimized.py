@@ -167,7 +167,7 @@ class OptimizedPoseBusters(PoseBusters):
             df.columns = [rename_map.get(col, col) for col in df.columns]
         # if not full_report:
         #     df = df[self.config["output_columns"]]
-        
+
         return df
 
     @staticmethod
