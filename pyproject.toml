@@ -37,7 +37,13 @@ docs = [
     "sphinx",
     "sphinxcontrib-programoutput",
 ]
-test = ["pre-commit", "pytest", "pytest-cov"]
+# test = ["pre-commit", "pytest", "pytest-cov"]
+test = [
+    "pre-commit",
+    "pytest",
+    "pytest-cov",
+    "pytest-timeout",
+]
 parallel = ["tqdm"]
 
 [project.urls]
@@ -88,6 +94,7 @@ exclude_lines = ["pragma: no cover", "raise NotImplementedError"]
 addopts = "--cov-report xml:coverage.xml --cov posebusters --cov-fail-under 0 --cov-append -m 'not integration'"
 pythonpath = ["posebusters"]
 testpaths = "tests"
+python_files = "test_*.py"
 
 [tool.pycln]
 all = false

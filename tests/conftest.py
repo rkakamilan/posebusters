@@ -1,4 +1,5 @@
 from __future__ import annotations
+from pathlib import Path
 
 import pytest
 from rdkit.Chem.rdmolfiles import (
@@ -250,3 +251,23 @@ def mol_2YU():
 @pytest.fixture
 def mol_HQT():
     return MolFromMolFile("tests/conftest/mol_HQT.mol")
+
+
+import tempfile
+import shutil
+
+@pytest.fixture(scope="session")
+def shared_datadir(tmp_path_factory):
+    """Create a shared temporary directory with test data."""
+    temp_dir = tmp_path_factory.mktemp("data")
+    # Copy test data to temporary directory
+    data_dir = Path(__file__).parent / "conftest"
+    for file in data_dir.glob("*.sdf"):
+        shutil.copy2(file, temp_dir)
+    return temp_dir
+
+
+@pytest.fixture(scope="session")
+def mock_molecule_files(shared_datadir):
+    """Create a list of molecule file paths."""
+    return list(shared_datadir.glob("*.sdf"))
