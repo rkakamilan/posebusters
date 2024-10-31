@@ -32,12 +32,16 @@ class ParallelPoseBusters(PoseBusters):
             show_progress: Show progress bar
         """
         super().__init__(config=config)
+        self.n_workers = n_workers
+        self.use_threading = use_threading
+        self.cache_size = cache_size
+        self.show_progress = show_progress
 
         self.executor = ParallelExecutor(
-            n_workers or mp.cpu_count(),
-            use_threading=use_threading
+            self.n_workers or mp.cpu_count(),
+            use_threading=self.use_threading
         )
-        self.cache = ComputationCache(max_size=cache_size)
+        self.cache = ComputationCache(max_size=self.cache_size)
         self.processor = MoleculeProcessor()
         self.show_progress = show_progress
         self._initialize_modules()
