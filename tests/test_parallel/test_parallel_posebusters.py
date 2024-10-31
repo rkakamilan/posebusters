@@ -33,7 +33,7 @@ def test_parallel_posebusters_initialization():
     assert hasattr(pb, 'n_workers')
     assert hasattr(pb, 'use_threading')
     assert hasattr(pb, 'cache')
-    assert pb.n_workers > 0
+    assert pb.executor.n_workers > 0
 
     # Custom initialization
     pb = ParallelPoseBusters(
@@ -126,13 +126,13 @@ def test_error_handling(shared_datadir):
     # Test with invalid molecule
     invalid_mol = None
     with pytest.warns(UserWarning, match="Invalid molecule: None provided"):
-        result = pb.bust(invalid_mol)
+        result = pb.bust([invalid_mol])
         assert isinstance(result, pd.DataFrame)
         assert result.empty
 
     # Test with non-existent file
     with pytest.warns(UserWarning):
-        result = pb.bust("non_existent.sdf")
+        result = pb.bust(["non_existent.sdf"])
         assert isinstance(result, pd.DataFrame)
         assert result.empty
 
