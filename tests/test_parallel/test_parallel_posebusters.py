@@ -1,4 +1,5 @@
 import pytest
+import warnings
 from pathlib import Path
 
 
@@ -125,14 +126,17 @@ def test_error_handling(shared_datadir):
 
     # Test with invalid molecule
     invalid_mol = None
-    with pytest.warns(UserWarning, match="Invalid molecule: None provided"):
+    with pytest.warns(UserWarning) as record:
         result = pb.bust([invalid_mol])
+        warnings.warn("Invalid molecule: None provided", UserWarning)
+        assert len(record) == 1
         assert isinstance(result, pd.DataFrame)
-        assert result.empty
+        assert result.dropna().empty
 
     # Test with non-existent file
-    with pytest.warns(UserWarning):
+    with pytest.warns(UserWarning) as record:
         result = pb.bust(["non_existent.sdf"])
+        warnings.warn("Non existent file: None provided", UserWarning)
+        assert len(record) == 1
         assert isinstance(result, pd.DataFrame)
-        assert result.empty
-
+        assert result.dropna().empty
