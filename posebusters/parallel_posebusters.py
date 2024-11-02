@@ -43,30 +43,38 @@ class ParallelPoseBusters(PoseBusters):
     def _run(self) -> Generator[dict, None, None]:
         """Run all tests on molecules provided in file paths."""
         self._initialize_modules()
+        # Get total mol numbers
+        total_mols = sum(
+            len(list(safe_supply_mols(
+                paths["mol_pred"],
+                **self.config.get("loading", {}).get("mol_pred", {})
+            )))
+            for _, paths in self.file_paths.iterrows()
+        )
 
-        for _, paths in self.file_paths.iterrows():
-            # 参照分子の読み込み
-            mol_args = {}
-            if "mol_cond" in paths and paths["mol_cond"] is not None:
-                mol_cond_load_params = self.config.get("loading", {}).get("mol_cond", {})
-                mol_args["mol_cond"] = safe_load_mol(path=paths["mol_cond"], **mol_cond_load_params)
-            if "mol_true" in paths and paths["mol_true"] is not None:
-                mol_true_load_params = self.config.get("loading", {}).get("mol_true", {})
-                mol_args["mol_true"] = safe_load_mol(path=paths["mol_true"], **mol_true_load_params)
 
-            # 予測分子のバッチ処理
-            mol_pred_load_params = self.config.get("loading", {}).get("mol_pred", {})
-            mols = list(safe_supply_mols(paths["mol_pred"], **mol_pred_load_params))
+        with tqdm(total=total_mols, disable=not self.show_progress) as pbar:
+            for _, paths in self.file_paths.iterrows():
+                # 参照分子の読み込み
+                mol_args = {}
+                if "mol_cond" in paths and paths["mol_cond"] is not None:
+                    mol_cond_load_params = self.config.get("loading", {}).get("mol_cond", {})
+                    mol_args["mol_cond"] = safe_load_mol(path=paths["mol_cond"], **mol_cond_load_params)
+                if "mol_true" in paths and paths["mol_true"] is not None:
+                    mol_true_load_params = self.config.get("loading", {}).get("mol_true", {})
+                    mol_args["mol_true"] = safe_load_mol(path=paths["mol_true"], **mol_true_load_params)
 
-            if self.config["top_n"] is not None:
-                mols = mols[:self.config["top_n"]]
+                mol_pred_load_params = self.config.get("loading", {}).get("mol_pred", {})
+                mols = list(safe_supply_mols(paths["mol_pred"], **mol_pred_load_params))
 
-            mol_batches = [
-                mols[i:i + self.batch_size]
-                for i in range(0, len(mols), self.batch_size)
-            ]
+                if self.config["top_n"] is not None:
+                    mols = mols[:self.config["top_n"]]
 
-            with tqdm(total=len(mols), disable=not self.show_progress) as pbar:
+                mol_batches = [
+                    mols[i:i + self.batch_size]
+                    for i in range(0, len(mols), self.batch_size)
+                ]
+
                 for batch in mol_batches:
                     # バッチ内の各分子を処理
                     batch_results = self._process_batch(
