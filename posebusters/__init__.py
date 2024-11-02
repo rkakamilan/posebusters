@@ -15,9 +15,11 @@ from posebusters.modules.sanity import (
 )
 from posebusters.modules.volume_overlap import check_volume_overlap
 from posebusters.posebusters import PoseBusters
+from posebusters.parallel_posebusters import ParallelPoseBusters
 
 __all__ = [
     "PoseBusters",
+    "ParallelPoseBusters",
     "check_all_atoms_connected",
     "check_chemistry_using_inchi",
     "check_chemistry_using_rdkit",
@@ -32,4 +34,4 @@ __all__ = [
     "check_volume_overlap",
 ]
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"
