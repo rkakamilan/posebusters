@@ -82,11 +82,12 @@ class ParallelPoseBusters(PoseBusters):
                         mol_args=mol_args,
                         paths=paths
                     )
-                    pbar.update(len(batch))
+                    # pbar.update(len(batch))
 
                     # 結果を生成
                     for result in batch_results:
                         yield result
+                        pbar.update(1)
 
     def _process_batch(
         self,
@@ -94,34 +95,55 @@ class ParallelPoseBusters(PoseBusters):
         mol_args: Dict[str, Mol],
         paths: pd.Series
     ) -> List[Dict[Tuple[str, str], List[Tuple[str, str, Any]]]]:
-        """Process a batch of molecules."""
+        """Process a batch of molecules in parallel."""
+        if not batch:
+            return []
+
         Executor = ThreadPoolExecutor if self.use_threading else ProcessPoolExecutor
-        batch_results = []
-
         with Executor(max_workers=self.n_workers) as executor:
-            futures = []
-            for i, mol_pred in enumerate(batch):
-                if mol_pred is None:
-                    continue
-
-                mol_args_copy = mol_args.copy()
-                mol_args_copy["mol_pred"] = mol_pred
-                results_key = (str(paths["mol_pred"]), self._get_name(mol_pred, i))
-
-                futures.append(
-                    executor.submit(
-                        self._process_single_molecule,
-                        mol_args_copy,
-                        results_key
-                    )
+            futures = [
+                executor.submit(
+                    self._process_batch_molecules,
+                    batch_chunk,
+                    mol_args,
+                    paths,
+                    start_idx=i * (len(batch) // self.n_workers)
                 )
+                for i, batch_chunk in enumerate(
+                    np.array_split(batch, self.n_workers)
+                )
+            ]
 
+            batch_results = []
             for future in futures:
-                result = future.result()
-                if result is not None:
-                    batch_results.append(result)
+                results = future.result()
+                if results:
+                    batch_results.extend(results)
 
         return batch_results
+
+    def _process_batch_molecules(
+        self,
+        molecules: List[Mol],
+        mol_args: Dict[str, Mol],
+        paths: pd.Series,
+        start_idx: int
+    ) -> List[Dict[Tuple[str, str], List[Tuple[str, str, Any]]]]:
+        """Process a chunk of molecules from a batch."""
+        results = []
+        for i, mol_pred in enumerate(molecules):
+            if mol_pred is None:
+                continue
+
+            mol_args_copy = mol_args.copy()
+            mol_args_copy["mol_pred"] = mol_pred
+            results_key = (str(paths["mol_pred"]), self._get_name(mol_pred, start_idx + i))
+
+            result = self._process_single_molecule(mol_args_copy, results_key)
+            if result is not None:
+                results.append(result)
+
+        return results
 
     def _process_single_molecule(
         self,
@@ -132,7 +154,6 @@ class ParallelPoseBusters(PoseBusters):
         results = []
 
         for name, fname, func, args in zip(self.module_name, self.fname, self.module_func, self.module_args):
-            # キャッシュのチェック
             cache_key = None
             if "mol_pred" in mol_args:
                 cache_key = self.cache.get_key(mol_args["mol_pred"], fname)
@@ -142,12 +163,9 @@ class ParallelPoseBusters(PoseBusters):
                         results.extend([(name, k, v) for k, v in cached_result.items()])
                         continue
 
-            # 必要な引数の準備
             args_needed = {k: v for k, v in mol_args.items() if k in args}
             if fname == "loading":
                 args_needed = {k: args_needed.get(k, None) for k in args_needed}
-
-            # モジュールの実行
             if fname != "loading" and not all(args_needed.get(m, None) for m in args_needed):
                 module_output: dict[str, Any] = {"results": {}}
             else:
@@ -155,7 +173,6 @@ class ParallelPoseBusters(PoseBusters):
                 if cache_key:
                     self.cache.set(cache_key, module_output["results"])
 
-            # 結果の保存
             results.extend([(name, k, v) for k, v in module_output["results"].items()])
 
         return {results_key: results}
