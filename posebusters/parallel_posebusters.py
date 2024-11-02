@@ -1,7 +1,8 @@
 import multiprocessing as mp
 import warnings
-from typing import Any, Dict, Iterable, List, Optional, Tuple, Union
+from typing import Any, Dict, Generator, Iterable, List, Optional, Tuple, Union
 from pathlib import Path
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 import pandas as pd
 import numpy as np
@@ -10,16 +11,15 @@ from tqdm import tqdm
 
 from . import PoseBusters
 from .parallel.cache import ComputationCache
-from .parallel.executor import ParallelExecutor
-from .parallel.processor import MoleculeProcessor
-from .tools.loading import safe_load_mol
+from .tools.loading import safe_load_mol, safe_supply_mols
+
 
 class ParallelPoseBusters(PoseBusters):
     """PoseBusters with parallel processing capabilities."""
 
     def __init__(
         self,
-        config: str | dict[str, Any] = "redock",
+        config: str | dict[str, Any] = "dock",
         n_workers: Optional[int] = None,
         use_threading: bool = False,
         cache_size: int = 1000,
@@ -57,7 +57,7 @@ class ParallelPoseBusters(PoseBusters):
             # 予測分子のバッチ処理
             mol_pred_load_params = self.config.get("loading", {}).get("mol_pred", {})
             mols = list(safe_supply_mols(paths["mol_pred"], **mol_pred_load_params))
-            
+
             if self.config["top_n"] is not None:
                 mols = mols[:self.config["top_n"]]
 
@@ -75,7 +75,7 @@ class ParallelPoseBusters(PoseBusters):
                         paths=paths
                     )
                     pbar.update(len(batch))
-                    
+
                     # 結果を生成
                     for result in batch_results:
                         yield result
