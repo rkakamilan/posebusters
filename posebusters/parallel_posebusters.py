@@ -12,7 +12,15 @@ from tqdm import tqdm
 from . import PoseBusters
 from .parallel.cache import ComputationCache
 from .tools.loading import safe_load_mol, safe_supply_mols
+from .posebusters import _dataframe_from_output
 
+class InvalidMoleculeError(Exception):
+    """Invalid molecule input error."""
+    pass
+
+class InvalidFilePathError(Exception):
+    """Invalid file path error."""
+    pass
 
 class ParallelPoseBusters(PoseBusters):
     """PoseBusters with parallel processing capabilities."""
@@ -40,10 +48,59 @@ class ParallelPoseBusters(PoseBusters):
                 UserWarning
             )
 
+    def bust(
+        self,
+        mol_pred: Union[Iterable[Union[Mol, Path, str]], Mol, Path, str],
+        mol_true: Optional[Union[Mol, Path, str]] = None,
+        mol_cond: Optional[Union[Mol, Path, str]] = None,
+        batch_size: int = 100,
+        full_report: bool = False,
+        output_intermediate_values: bool = False,
+    ) -> pd.DataFrame:
+        """Run parallel tests on molecules."""
+        # Noneチェック
+        if mol_pred is None:
+            raise InvalidMoleculeError("mol_pred cannot be None")
+
+        # mol_pred_listの準備と検証
+        try:
+            mol_pred_list = [mol_pred] if isinstance(mol_pred, (Mol, Path, str)) else list(mol_pred)
+        except TypeError as e:
+            raise InvalidMoleculeError(f"Invalid input type for mol_pred: {e}")
+
+        # リスト内のNoneチェック
+        if any(mol_p is None for mol_p in mol_pred_list):
+            raise InvalidMoleculeError("mol_pred list contains None")
+
+        # パスの検証
+        for mol_p in mol_pred_list:
+            if isinstance(mol_p, (str, Path)) and not Path(mol_p).exists():
+                raise InvalidFilePathError(f"File not found: {mol_p}")
+        # 参照分子のパス検証
+        if isinstance(mol_true, (str, Path)) and not Path(mol_true).exists():
+            raise InvalidFilePathError(f"Reference molecule file not found: {mol_true}")
+        if isinstance(mol_cond, (str, Path)) and not Path(mol_cond).exists():
+            raise InvalidFilePathError(f"Conditioning molecule file not found: {mol_cond}")
+
+        # DataFrameの準備
+        columns = ["mol_pred", "mol_true", "mol_cond"]
+        self.file_paths = pd.DataFrame(
+            [[p, mol_true, mol_cond] for p in mol_pred_list],
+            columns=columns
+        )
+
+        results_gen = self._run()
+        df = pd.concat([_dataframe_from_output(d, self.config, full_report=full_report) for d in results_gen])
+        df.index.names = ["file", "molecule"]
+        df.columns = [c.lower().replace(" ", "_") for c in df.columns]
+
+        return df
+
     def _run(self) -> Generator[dict, None, None]:
         """Run all tests on molecules provided in file paths."""
         self._initialize_modules()
-        # Get total mol numbers
+
+        # 全体の処理数を計算
         total_mols = sum(
             len(list(safe_supply_mols(
                 paths["mol_pred"],
@@ -52,20 +109,34 @@ class ParallelPoseBusters(PoseBusters):
             for _, paths in self.file_paths.iterrows()
         )
 
-
         with tqdm(total=total_mols, disable=not self.show_progress) as pbar:
             for _, paths in self.file_paths.iterrows():
-                # 参照分子の読み込み
                 mol_args = {}
                 if "mol_cond" in paths and paths["mol_cond"] is not None:
-                    mol_cond_load_params = self.config.get("loading", {}).get("mol_cond", {})
-                    mol_args["mol_cond"] = safe_load_mol(path=paths["mol_cond"], **mol_cond_load_params)
-                if "mol_true" in paths and paths["mol_true"] is not None:
-                    mol_true_load_params = self.config.get("loading", {}).get("mol_true", {})
-                    mol_args["mol_true"] = safe_load_mol(path=paths["mol_true"], **mol_true_load_params)
+                    try:
+                        mol_cond_load_params = self.config.get("loading", {}).get("mol_cond", {})
+                        mol_args["mol_cond"] = safe_load_mol(path=paths["mol_cond"], **mol_cond_load_params)
+                        if mol_args["mol_cond"] is None:
+                            warnings.warn(f"Failed to load conditioning molecule: {paths['mol_cond']}", UserWarning)
+                    except Exception as e:
+                        warnings.warn(f"Error loading conditioning molecule: {e}", UserWarning)
 
+                if "mol_true" in paths and paths["mol_true"] is not None:
+                    try:
+                        mol_true_load_params = self.config.get("loading", {}).get("mol_true", {})
+                        mol_args["mol_true"] = safe_load_mol(path=paths["mol_true"], **mol_true_load_params)
+                        if mol_args["mol_true"] is None:
+                            warnings.warn(f"Failed to load reference molecule: {paths['mol_true']}", UserWarning)
+                    except Exception as e:
+                        warnings.warn(f"Error loading reference molecule: {e}", UserWarning)
+
+                # 予測分子のバッチ処理
                 mol_pred_load_params = self.config.get("loading", {}).get("mol_pred", {})
-                mols = list(safe_supply_mols(paths["mol_pred"], **mol_pred_load_params))
+                try:
+                    mols = list(safe_supply_mols(paths["mol_pred"], **mol_pred_load_params))
+                except Exception as e:
+                    warnings.warn(f"Error loading predicted molecules: {e}", UserWarning)
+                    continue
 
                 if self.config["top_n"] is not None:
                     mols = mols[:self.config["top_n"]]
@@ -76,18 +147,20 @@ class ParallelPoseBusters(PoseBusters):
                 ]
 
                 for batch in mol_batches:
-                    # バッチ内の各分子を処理
-                    batch_results = self._process_batch(
-                        batch=batch,
-                        mol_args=mol_args,
-                        paths=paths
-                    )
-                    # pbar.update(len(batch))
-
-                    # 結果を生成
-                    for result in batch_results:
-                        yield result
-                        pbar.update(1)
+                    try:
+                        # バッチ内の各分子を処理
+                        batch_results = self._process_batch(
+                            batch=batch,
+                            mol_args=mol_args,
+                            paths=paths
+                        )
+                        # 結果を生成
+                        for result in batch_results:
+                            yield result
+                            pbar.update(1)
+                    except Exception as e:
+                        warnings.warn(f"Error processing batch: {e}", UserWarning)
+                        continue
 
     def _process_batch(
         self,
