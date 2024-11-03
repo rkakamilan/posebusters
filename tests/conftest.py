@@ -250,3 +250,17 @@ def mol_2YU():
 @pytest.fixture
 def mol_HQT():
     return MolFromMolFile("tests/conftest/mol_HQT.mol")
+
+import tempfile
+import shutil
+from pathlib import Path
+
+@pytest.fixture(scope="session")
+def shared_datadir(tmp_path_factory):
+    """Create a shared temporary directory with test data."""
+    temp_dir = tmp_path_factory.mktemp("data")
+    # Copy test data to temporary directory
+    data_dir = Path(__file__).parent / "conftest"
+    for file in data_dir.glob("*.sdf"):
+        shutil.copy2(file, temp_dir)
+    return temp_dir
