@@ -1,6 +1,12 @@
 ![posebusters_banner](https://github.com/maabuu/posebusters/blob/b5f4c2caed1499c2b73f5297a08e60ec7d263c61/docs/source/_static/logo_banner.png?raw=true "PoseBusters")
 
-PoseBusters: Plausibility checks for generated molecule poses.
+
+
+# ParallelPoseBusters
+Parallel processing extension for PoseBusters package.
+
+<!-- PoseBusters: Plausibility checks for generated molecule poses. -->
+
 
 ### Paper in [Chemical Science](https://pubs.rsc.org/en/content/articlelanding/2024/sc/d3sc04185a) and preprint on [arXiv](https://arxiv.org/abs/2308.05777)
 
@@ -8,7 +14,8 @@ PoseBusters: Plausibility checks for generated molecule poses.
 
 ```bash
 # install with pip from PyPI
-pip install posebusters
+# pip install posebusters
+pip install -e .
 ```
 <!-- # install with conda from conda-forge
 conda install posebusters -c conda-forge -->
@@ -33,6 +40,8 @@ bust ligand_pred.sdf -l mol_true.sdf -p protein.pdb
 # Check any of the three by providing a csv with files to check together
 bust -t file_table.csv
 ```
+Command line interface is not implemented for parallelposebusters.
+
 
 <!-- ### Python API
 
@@ -48,6 +57,26 @@ DockBuster().bust(ligand_pred_file, protein_crystal_file)
 # check molecule
 DockBuster().bust(ligand_pred_file, protein_crystal_file)
 ``` -->
+
+<!-- ### Python API -->
+```python
+from parallelposebusters import ParallelPoseBusters
+
+pb = ParallelPoseBusters(
+    config="redock",
+    n_workers=4,          # Number of workers
+    use_threading=True,   # Use threads instead of processes
+    batch_size=100,      # Batch size for processing
+    show_progress=True   # Show progress bar
+)
+
+# Process molecules
+results = pb.bust(
+    mol_pred="molecules.sdf",
+    mol_true="reference.sdf",
+    mol_cond="protein.pdb"
+)
+```
 
 ## Documentation
 
@@ -79,3 +108,23 @@ This program uses software written by other people. Notably:
 
 - RDKit - [https://github.com/rdkit/rdkit](https://github.com/rdkit/rdkit)
 - Pandas - [https://github.com/pandas-dev/pandas](https://github.com/pandas-dev/pandas)
+
+
+## Features for PallalelPoseBusters
+
+- Parallel processing of molecules
+- Batch processing support
+- Progress bar
+- Result caching
+- Compatible with original PoseBusters output format
+
+## Dependencies for ParallelPoseBusters
+
+- posebusters >= 0.3.1
+- rdkit >= 2020.09
+- pandas
+- numpy
+- tqdm
+
+## License
+[Same as original license]
