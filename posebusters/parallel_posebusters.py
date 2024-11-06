@@ -2,7 +2,7 @@ import multiprocessing as mp
 import warnings
 from typing import Any, Dict, Generator, Iterable, List, Optional, Tuple, Union
 from pathlib import Path
-from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
+from concurrent.futures import as_completed, ProcessPoolExecutor, ThreadPoolExecutor
 
 import pandas as pd
 import numpy as np
@@ -172,6 +172,9 @@ class ParallelPoseBusters(PoseBusters):
         if not batch:
             return []
 
+        # バッチサイズに応じてワーカー数を調整
+        effective_n_workers = min(self.n_workers, len(batch))
+
         Executor = ThreadPoolExecutor if self.use_threading else ProcessPoolExecutor
         with Executor(max_workers=self.n_workers) as executor:
             futures = [
@@ -180,7 +183,7 @@ class ParallelPoseBusters(PoseBusters):
                     batch_chunk,
                     mol_args,
                     paths,
-                    start_idx=i * (len(batch) // self.n_workers)
+                    start_idx=i * (len(batch) // effective_n_workers)
                 )
                 for i, batch_chunk in enumerate(
                     np.array_split(batch, self.n_workers)
@@ -188,10 +191,13 @@ class ParallelPoseBusters(PoseBusters):
             ]
 
             batch_results = []
-            for future in futures:
-                results = future.result()
-                if results:
-                    batch_results.extend(results)
+            for future in as_completed(futures):
+                try:
+                    results = future.result()
+                    if results:
+                        batch_results.extend(results)
+                except Exception as e:
+                    warnings.warn(f"Error in batch {futures[future]}: {str(e)}")
 
         return batch_results
 
