@@ -186,7 +186,7 @@ class ParallelPoseBusters(PoseBusters):
                     start_idx=i * (len(batch) // effective_n_workers)
                 )
                 for i, batch_chunk in enumerate(
-                    np.array_split(batch, self.n_workers)
+                    np.array_split(batch, effective_n_workers)
                 )
             ]
 
