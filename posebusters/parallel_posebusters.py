@@ -174,6 +174,11 @@ class ParallelPoseBusters(PoseBusters):
 
         # バッチサイズに応じてワーカー数を調整
         effective_n_workers = min(self.n_workers, len(batch))
+        if self.use_threading:
+            import os
+            os.environ["MKL_NUM_THREADS"] = str(effective_n_workers)
+            os.environ["OPENBLAS_NUM_THREADS"] = str(effective_n_workers)
+            os.environ["OMP_NUM_THREADS"] = str(effective_n_workers)
 
         Executor = ThreadPoolExecutor if self.use_threading else ProcessPoolExecutor
         with Executor(max_workers=self.n_workers) as executor:
