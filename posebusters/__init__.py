@@ -16,10 +16,12 @@ from posebusters.modules.sanity import (
 from posebusters.modules.volume_overlap import check_volume_overlap
 from posebusters.posebusters import PoseBusters
 from posebusters.parallel_posebusters import ParallelPoseBusters
+from posebusters.ipyparallel_posebusters import IPyParallelPoseBusters
 
 __all__ = [
     "PoseBusters",
     "ParallelPoseBusters",
+    "IPyParallelPoseBusters",
     "check_all_atoms_connected",
     "check_chemistry_using_inchi",
     "check_chemistry_using_rdkit",
