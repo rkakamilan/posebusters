@@ -1,12 +1,9 @@
 from __future__ import annotations
 
 import pytest
-from rdkit.Chem.rdmolfiles import (
-    MolFromMol2File,
-    MolFromMolFile,
-    MolFromPDBFile,
-    SDMolSupplier,
-)
+from rdkit import Chem
+from rdkit.Chem.rdDistGeom import EmbedMolecule, srETKDGv3
+from rdkit.Chem.rdmolfiles import MolFromMol2File, MolFromMolFile, MolFromPDBFile, SDMolSupplier
 
 
 @pytest.fixture
@@ -250,3 +247,57 @@ def mol_2YU():
 @pytest.fixture
 def mol_HQT():
     return MolFromMolFile("tests/conftest/mol_HQT.mol")
+
+
+@pytest.fixture
+def mol_3wrb_gde_true():
+    return MolFromPDBFile("tests/conftest/mol_3WRB_1_GDE_0_ligand_true.pdb")
+
+
+@pytest.fixture
+def mol_3wrb_gde_pred():
+    return MolFromMolFile("tests/conftest/mol_3WRB_1_GDE_0_ligand_pred.sdf")
+
+
+def embed_mol(smi: str) -> Chem.Mol:
+    hmol = Chem.AddHs(Chem.MolFromSmiles(smi))
+    ps = srETKDGv3()
+    ps.randomState = 42
+    _ = EmbedMolecule(hmol, params=ps)
+    return hmol
+
+
+@pytest.fixture()
+def mols_flat_etkdgv3():
+    # non-aromatic flat
+    smis_flat = ["C1=CC2=CC=CC2=C1", "C1=C[CH]C=C1", "N1C=CNC=C1", "C1C=CN=CN1"]
+    # aromatic flat
+    smis_flat.extend(["c1ccccc1", "c1cnc[nH]1"])
+    return [embed_mol(smi) for smi in smis_flat]
+
+
+@pytest.fixture()
+def mols_nonflat_etkdgv3():
+    # just nonflat
+    smis_flat = ["C1CC(C)NC1", "N1C=CCC=C1", "C1C=CCCO1"]
+    return [embed_mol(smi) for smi in smis_flat]
+
+
+@pytest.fixture()
+def mol_awj_ideal():
+    return MolFromMolFile("tests/conftest/mol_AWJ_ideal.sdf")
+
+
+@pytest.fixture()
+def mol_o2u_ideal():
+    return MolFromMolFile("tests/conftest/mol_O2U_ideal.sdf")
+
+
+@pytest.fixture()
+def mol_pip_ideal():
+    return MolFromMolFile("tests/conftest/mol_PIP_ideal.sdf")
+
+
+@pytest.fixture()
+def mol_pip_wrong():
+    return MolFromMolFile("tests/conftest/mol_PIP_wrong.sdf")

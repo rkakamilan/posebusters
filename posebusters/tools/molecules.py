@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable
 from copy import deepcopy
 from logging import getLogger
-from typing import Iterable
 
 import numpy as np
 from rdkit import RDLogger
@@ -56,17 +56,21 @@ def neutralize_atoms(mol: Mol) -> Mol:
     """Add and remove hydrogens to neutralize charges ignoring overall charge."""
     # https://www.rdkit.org/docs/Cookbook.html#neutralizing-charged-molecules
     # stronger than rdkit.Chem.MolStandardize.rdMolStandardize.Uncharger
-    pattern = MolFromSmarts("[+1!h0!$([*]~[-1,-2,-3,-4]),-1!$([*]~[+1,+2,+3,+4])]")
-    at_matches = mol.GetSubstructMatches(pattern)
-    at_matches_list = [y[0] for y in at_matches]
-    if len(at_matches_list) > 0:
-        for at_idx in at_matches_list:
-            atom = mol.GetAtomWithIdx(at_idx)
-            chg = atom.GetFormalCharge()
-            hcount = atom.GetTotalNumHs()
-            atom.SetFormalCharge(0)
-            atom.SetNumExplicitHs(hcount - chg)
-            atom.UpdatePropertyCache()
+    try:
+        pattern = MolFromSmarts("[+1!h0!$([*]~[-1,-2,-3,-4]),-1!$([*]~[+1,+2,+3,+4])]")
+        at_matches = mol.GetSubstructMatches(pattern)
+        at_matches_list = [y[0] for y in at_matches]
+        if len(at_matches_list) > 0:
+            for at_idx in at_matches_list:
+                atom = mol.GetAtomWithIdx(at_idx)
+                chg = atom.GetFormalCharge()
+                hcount = atom.GetTotalNumHs()
+                atom.SetFormalCharge(0)
+                atom.SetNumExplicitHs(hcount - chg)
+                atom.UpdatePropertyCache()
+    except AtomValenceException:
+        logger.warning("AtomValenceException raised while neutralizing molecule. Continuing with original molecule.")
+        return mol
     return mol
 
 
@@ -81,7 +85,7 @@ def remove_all_charges_and_hydrogens(mol: Mol) -> Mol:
     except AtomValenceException:
         # from rdkit.Chem.MolStandardize.rdMolStandardize import Uncharger
         # mol = Uncharger().uncharge(mol)
-        logger.error("AtomValenceException raised while neutralizing molecule. Continuing with original molecule.")
+        logger.warning("AtomValenceException raised while neutralizing molecule. Continuing with original molecule.")
         return mol
     return mol
 
@@ -91,13 +95,6 @@ def add_stereo_hydrogens(mol: Mol) -> Mol:
     exclude = {match[1] for match in mol.GetSubstructMatches(MolFromSmarts("[CX3]=[NH1]"))}
     atoms = [a.GetIdx() for a in mol.GetAtoms() if a.GetAtomicNum() != 1 if a.GetIdx() not in exclude]
     mol = AddHs(mol, onlyOnAtoms=atoms, addCoords=True)
-    return mol
-
-
-def assert_sanity(mol: Mol) -> Mol:
-    """Check that RDKit sanitization does not fail."""
-    flags = SanitizeMol(mol)
-    assert flags == 0, f"Sanitization failed with flags {flags}"
     return mol
 
 

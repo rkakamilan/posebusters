@@ -31,6 +31,14 @@ mol_true_5ze6 = "tests/conftest/5ze6/5ze6_true.mol2"
 mol_pred_5ze6 = "tests/conftest/5ze6/5ze6_pred.sdf"
 mol_cond_5ze6 = "tests/conftest/5ze6/5ze6_cond.pdb"
 
+mol_true_sanity = "tests/conftest/sanity_error/true.sdf"
+mol_pred_sanity = "tests/conftest/sanity_error/pred.sdf"
+mol_cond_sanity = "tests/conftest/sanity_error/protein.pdb"
+
+mol_true_sanity_2 = "tests/conftest/sanity_error_2/true.sdf"
+mol_pred_sanity_2 = "tests/conftest/sanity_error_2/pred.sdf"
+mol_cond_sanity_2 = "tests/conftest/sanity_error_2/protein.pdb"
+
 
 def test_bust_redocks_1ia1() -> None:
     posebusters = PoseBusters("redock")
@@ -165,3 +173,17 @@ def test_check_energy_ratio_1jn2_62(mol_pred_1jn2_gen62):
     assert df["mol_pred_loaded"].all()
     # assert that there is not a NA value given everyything else is correct
     assert not (df.eq(False) | df.isna()).all(axis=1).any()
+
+
+def test_check_sanity():
+    posebusters = PoseBusters("redock")
+    df = posebusters.bust([mol_pred_sanity], mol_true_sanity, mol_cond_sanity, full_report=True)
+    assert df["mol_true_loaded"].all()
+    assert (df["rmsd"] < 3).all()
+
+
+def test_check_sanity_2():
+    posebusters = PoseBusters("redock")
+    df = posebusters.bust([mol_pred_sanity_2], mol_true_sanity_2, mol_cond_sanity_2, full_report=True)
+    assert df["mol_true_loaded"].all()
+    assert (df["rmsd"] < 3).all()

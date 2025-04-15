@@ -1,10 +1,12 @@
 """Module to check RMSD between docked and crystal ligand."""
+
 from __future__ import annotations
 
 import logging
 from copy import deepcopy
 
 import numpy as np
+from rdkit.Chem.AllChem import AssignBondOrdersFromTemplate
 from rdkit.Chem.MolStandardize import rdMolStandardize
 from rdkit.Chem.rdchem import Mol
 from rdkit.Chem.rdMolAlign import CalcRMS, GetBestRMS
@@ -98,8 +100,8 @@ def robust_rmsd(  # noqa: PLR0913
         RemoveStereochemistry(mol_ref)
 
     if heavy_only:
-        mol_probe = RemoveHs(mol_probe)
-        mol_ref = RemoveHs(mol_ref)
+        mol_probe = RemoveHs(mol_probe, sanitize=False)
+        mol_ref = RemoveHs(mol_ref, sanitize=False)
 
     # combine parameters
     params = dict(symmetrizeConjugatedTerminalGroups=symmetrizeConjugatedTerminalGroups, kabsch=kabsch, **params)
@@ -109,6 +111,26 @@ def robust_rmsd(  # noqa: PLR0913
     if not np.isnan(rmsd):
         return rmsd
 
+    # try again ignoring charges or tautomers
+    rmsd = _rmsd_ignoring_charges_and_tautomers(mol_ref, mol_probe, conf_id_ref, conf_id_probe, params)
+    if not np.isnan(rmsd):
+        return rmsd
+
+    # try assigning the bond orders of one molecule to the other
+    try:
+        mol_probe_new_bonds = AssignBondOrdersFromTemplate(mol_ref, mol_probe)
+    except ValueError:
+        return np.nan
+    rmsd = _call_rdkit_rmsd(mol_probe_new_bonds, mol_ref, conf_id_probe, conf_id_ref, **params)
+    if not np.isnan(rmsd):
+        return rmsd
+
+    return np.nan
+
+
+def _rmsd_ignoring_charges_and_tautomers(
+    mol_ref: Mol, mol_probe: Mol, conf_id_ref: int, conf_id_probe: int, params: dict
+) -> float:
     # try again but remove charges and hydrogens
     mol_ref_uncharged = remove_all_charges_and_hydrogens(mol_ref)
     mol_probe_uncharged = remove_all_charges_and_hydrogens(mol_probe)
@@ -139,7 +161,7 @@ def robust_rmsd(  # noqa: PLR0913
     if not np.isnan(rmsd):
         return rmsd
 
-    return np.nan
+    return rmsd
 
 
 def _call_rdkit_rmsd(mol_probe: Mol, mol_ref: Mol, conf_id_probe: int, conf_id_ref: int, **params):
@@ -164,11 +186,15 @@ def intercentroid(
     mol_probe: Mol, mol_ref: Mol, conf_id_probe: int = -1, conf_id_ref: int = -1, heavy_only: bool = True
 ) -> float:
     """Distance between centroids of two molecules."""
-    if heavy_only:
-        mol_probe = RemoveHs(mol_probe)
-        mol_ref = RemoveHs(mol_ref)
 
-    centroid_probe = mol_probe.GetConformer(conf_id_probe).GetPositions().mean(axis=0)
-    centroid_ref = mol_ref.GetConformer(conf_id_ref).GetPositions().mean(axis=0)
-
+    centroid_probe = get_centroid(mol_probe, heavy_only, conf_id_probe)
+    centroid_ref = get_centroid(mol_ref, heavy_only, conf_id_ref)
     return float(np.linalg.norm(centroid_probe - centroid_ref))
+
+
+def get_centroid(mol: Mol, heavy_only: bool = True, conf_id: int = -1) -> np.ndarray:
+    """Get centroid of molecule."""
+    pos = mol.GetConformer(conf_id).GetPositions()
+    if heavy_only:
+        pos = pos[[atom.GetAtomicNum() != 1 for atom in mol.GetAtoms()], :]
+    return pos.mean(axis=0)
